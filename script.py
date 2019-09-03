@@ -3,6 +3,8 @@ from pprint import pprint
 import logging
 from pprint import pprint
 import json
+import datetime
+import time
 
 # Logger Settings
 FORMAT = '%(asctime)-15s %(message)s'
@@ -14,6 +16,10 @@ logger.setLevel(logging.INFO)
 TEXT_DIR = "textfiles"
 JSON_DIR = "jsonfiles"
 LIMIT_SIZE = 500
+
+LAST_TEXT_FILE = ""
+LAST_JSON_FILE = ""
+LAST_INDEX_IN_LOG = 0
 
 
 def getTextFiles():
@@ -65,18 +71,43 @@ def getLastUsedObjectFromFiles(filesList):
     return codes
 
 
-def createExpiryDate(date):
-    return date
+def parseManufacturingDate(inputDate):
+    dateString = inputDate.split("=")[1]
+    year = dateString.split(".")[1]
+    day = dateString[:2]
+    month = dateString[2:5].title()
+    dateString = f"{day}-{month}-20{year}"
+    retval = createTimeStampFromString(dateString.strip(), "%d-%b-%Y")
+    return retval
+
+
+def createExpiryDate(inputDate):
+    date = datetime.datetime.fromtimestamp(inputDate//1000)
+    expiryDate = date + datetime.timedelta(days=90)
+    return createTimeStampFromDate(expiryDate)
+
+
+def createTimeStampFromDate(inputDate):
+    return time.mktime(inputDate.timetuple()) * 1000
+
+
+def createTimeStampFromString(inputDate, format="%d-%m-%Y %H:%M:%S"):
+    date = datetime.datetime.strptime(inputDate, format).date().timetuple()
+    return time.mktime(date) * 1000
 
 
 def createRequestBody(obj, productCode):
+    mfd = parseManufacturingDate(obj["manufacturingDate"])
+    exp = createExpiryDate(mfd)
+    plantActivatedAt = createTimeStampFromString(obj["datetime"])
+
     body = {
         'batchId': obj["batchNo"],
-        'plantActivatedAt': obj["datetime"],
+        'plantActivatedAt': plantActivatedAt,
         'productCode': productCode,
-        'mfd': obj["manufacturingDate"],
+        'mfd': mfd,
         'mrp': obj["mrp"],
-        'expiry': createExpiryDate(obj["manufacturingDate"]),
+        'expiry': exp,
     }
 
     return body
@@ -84,6 +115,7 @@ def createRequestBody(obj, productCode):
 
 def createRequestForRange(start, end, list, objectToReplicate):
     requests = []
+    print(f"RANGE: {start} -> {end}")
     for index, code in enumerate(list):
         if index >= end:
             break
@@ -109,6 +141,7 @@ def createUpdateRequests(codes, lastUsedObjects):
 
 
 def main():
+    try
     jsonFiles = getJsonFiles()
     uniqueFileNames = set()
 
@@ -116,25 +149,31 @@ def main():
         name = filename.split("_log_")
         uniqueFileNames.add(name[0])
 
-    print("Unique Files:")
-    pprint(uniqueFileNames)
+    logger.info(f"UNIQUE FILES = {len(uniqueFileNames)}")
 
     # Iterate over each unique file
     for filename in uniqueFileNames:
+        logger.info(f"PROCESSING FILE: {filename}")
         jsonFilesBatch = groupFilesByName(filename, jsonFiles)
-        print("Json Files to Process:")
-        pprint(jsonFilesBatch)
-        codes = getCodesFromTextFile(filename+".txt")
+        logger.info(f"RELATED JSON FILES = {jsonFilesBatch}")
+        codesFromTextFile = getCodesFromTextFile(filename+".txt")
+        logger.info(f"CODES FROM TEXT FILE = {len(codesFromTextFile)}")
         lastUsedObjects = getLastUsedObjectFromFiles(jsonFilesBatch)
-        requests = createUpdateRequests(codes, lastUsedObjects)
+        requests = createUpdateRequests(codesFromTextFile, lastUsedObjects)
 
-        print("Total Codes:")
-        pprint(len(codes))
-        print("Total Udpate Requests:")
-        pprint(len(requests))
+        print("TOTAL CODES: " + str(len(codesFromTextFile)))
+        print("TOTAL REQUESTS:" + str(len(requests)))
 
-    # getCodesFromTextFile("futmtu2nzqwmjixmze0ng_m1_fm2112t_20000.txt")
+        pprint(requests[-1])
 
 
 if __name__ == "__main__":
+    logger.info("--------------------------------")
+    logger.info("Script Started")
+    logger.info("--------------------------------")
+
     main()
+
+    logger.info("--------------------------------")
+    logger.info("Script Ended")
+    logger.info("--------------------------------")
