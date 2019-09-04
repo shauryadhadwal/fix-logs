@@ -5,6 +5,7 @@ from pprint import pprint
 import json
 import datetime
 import time
+import re
 
 # Logger Settings
 FORMAT = '%(asctime)-15s %(message)s'
@@ -92,6 +93,15 @@ def parseManufacturingDate(inputDate):
     return retval
 
 
+def parseManufacturingDateWithRegex(inputDate):
+    dateString = inputDate.split("=")[1]
+    month = re.findall(r"(?=[a-zA-Z])\w+", dateString)[0].title()
+    day, year = re.findall(r"(?=\d)\w.", dateString)
+    dateString = f"{day}-{month}-20{year}"
+    retval = createTimeStampFromString(dateString.strip(), "%d-%b-%Y")
+    return retval
+
+
 def createExpiryDate(inputDate):
     date = datetime.datetime.fromtimestamp(inputDate//1000)
     expiryDate = date + datetime.timedelta(days=90)
@@ -108,7 +118,7 @@ def createTimeStampFromString(inputDate, format="%d-%m-%Y %H:%M:%S"):
 
 
 def createRequestBody(obj, productCode):
-    mfd = parseManufacturingDate(obj["manufacturingDate"])
+    mfd = parseManufacturingDateWithRegex(obj["manufacturingDate"])
     exp = createExpiryDate(mfd)
     plantActivatedAt = createTimeStampFromString(obj["datetime"])
 
@@ -185,6 +195,8 @@ def main():
         logger.info(f"LAST_TEXT_FILE : {LAST_TEXT_FILE}")
         logger.info(f"LAST_TEXT_FILE : {LAST_JSON_FILE}")
         logger.info(f"LAST_INDEX_IN_LOG : {LAST_INDEX_IN_LOG}")
+        logger.info("[ERROR]")
+        logger.error(exp)
 
 
 if __name__ == "__main__":
